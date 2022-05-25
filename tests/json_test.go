@@ -35,6 +35,8 @@ type GithubEvent struct {
 	Assignee     Account  `json:"assignee"`
 	Labels       []string `json:"labels"`
 	Contributors []Account
+	// should not be exported
+	createdAt string
 }
 
 type InconsistentAccount struct {

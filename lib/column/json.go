@@ -129,6 +129,10 @@ func parseSliceStruct(name string, structVal reflect.Value, jCol JSON, first boo
 			continue
 		}
 		field := structVal.Field(i)
+		if !field.CanInterface() {
+			// can't interface - likely not exported so ignore the field
+			continue
+		}
 		kind := field.Kind()
 		value := field.Interface()
 		fType := field.Type()
@@ -198,6 +202,10 @@ func parseStruct(name string, structVal reflect.Value, jCol JSON) error {
 			continue
 		}
 		field := structVal.Field(i)
+		if !field.CanInterface() {
+			// can't interface - likely not exported so ignore the field
+			continue
+		}
 		kind := field.Kind()
 		value := field.Interface()
 		fType := field.Type()
@@ -237,6 +245,10 @@ func appendStruct(jCol *JSONObject, data interface{}) error {
 			}
 			// handle the fields in the struct
 			field := rStruct.Field(i)
+			if !field.CanInterface() {
+				// can't interface - likely not exported so ignore the field
+				continue
+			}
 			kind := field.Kind()
 			value := field.Interface()
 			if kind == reflect.Struct {
