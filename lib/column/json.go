@@ -401,6 +401,7 @@ func (jCol *JSONList) Type() Type {
 type JSONObject struct {
 	columns []Interface
 	name    string
+	root    bool
 }
 
 func (jCol *JSONObject) Name() string {
@@ -487,10 +488,10 @@ func (jCol *JSONObject) Type() Type {
 	for i, v := range jCol.columns {
 		subTypes[i] = string(v.Type())
 	}
-	if jCol.name != "" {
-		return Type(fmt.Sprintf("%s Tuple(%s)", jCol.name, strings.Join(subTypes, ", ")))
+	if jCol.root {
+		return Type(fmt.Sprintf("Tuple(%s)", strings.Join(subTypes, ", ")))
 	}
-	return Type(fmt.Sprintf("Tuple(%s)", strings.Join(subTypes, ", ")))
+	return Type(fmt.Sprintf("%s Tuple(%s)", jCol.name, strings.Join(subTypes, ", ")))
 }
 
 func (jCol *JSONObject) ScanType() reflect.Type {
@@ -518,6 +519,7 @@ func (jCol *JSONObject) Append(_ interface{}) (nulls []uint8, err error) {
 
 func (jCol *JSONObject) AppendRow(v interface{}) error {
 	if reflect.ValueOf(v).Kind() == reflect.Struct {
+		jCol.root = true
 		return appendStruct(jCol, v)
 	}
 	return &Error{

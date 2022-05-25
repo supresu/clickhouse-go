@@ -267,16 +267,11 @@ func (col *Array) scanJSONSlice(jsonSlice reflect.Value, row int) error {
 	tCol, ok := col.values.(*Tuple)
 	if !ok {
 		// if it is not an array of tuples it will be an array of primitives in json
-		value := reflect.ValueOf(col.Row(row, false))
-		if value.CanConvert(jsonSlice.Type()) {
-			jsonSlice.Set(value.Convert(jsonSlice.Type()))
-			return nil
+		err := setStructValue(jsonSlice, col, row)
+		if err != nil {
+			return err
 		}
-		return &ColumnConverterError{
-			Op:   "ScanRow",
-			To:   fmt.Sprintf("%T", jsonSlice),
-			From: value.Type().String(),
-		}
+		return nil
 	}
 	// Array(Tuple so depth 1 for JSON
 	offset := col.offsets[0]
@@ -313,15 +308,9 @@ func (col *Array) scanJSONSlice(jsonSlice reflect.Value, row int) error {
 						return err
 					}
 				default:
-					value := reflect.ValueOf(c.Row(int(i), false))
-					if value.CanConvert(sField.Type()) {
-						sField.Set(value.Convert(sField.Type()))
-					} else {
-						return &ColumnConverterError{
-							Op:   "ScanRow",
-							To:   fmt.Sprintf("%T", sField),
-							From: string(col.Type()),
-						}
+					err := setStructValue(sField, c, row)
+					if err != nil {
+						return err
 					}
 				}
 			}
