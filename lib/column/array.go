@@ -36,6 +36,11 @@ type Array struct {
 	values   Interface
 	offsets  []*offset
 	scanType reflect.Type
+	name     string
+}
+
+func (col *Array) Name() string {
+	return col.name
 }
 
 func (col *Array) parse(t Type) (_ Interface, err error) {
@@ -54,7 +59,7 @@ parse:
 		}
 	}
 	if col.depth != 0 {
-		if col.values, err = Type(typeStr).Column(); err != nil {
+		if col.values, err = Type(typeStr).Column(col.name); err != nil {
 			return nil, err
 		}
 		offsetScanTypes := make([]reflect.Type, 0, col.depth)
@@ -89,7 +94,7 @@ func (col *Array) ScanType() reflect.Type {
 
 func (col *Array) Rows() int {
 	if len(col.offsets) != 0 {
-		return len(col.offsets[0].values)
+		return len(col.offsets[0].values.data)
 	}
 	return 0
 }
@@ -158,10 +163,10 @@ func (col *Array) AppendRow(v interface{}) error {
 func (col *Array) append(elem reflect.Value, level int) error {
 	if level < col.depth {
 		offset := uint64(elem.Len())
-		if ln := len(col.offsets[level].values); ln != 0 {
-			offset += col.offsets[level].values[ln-1]
+		if ln := len(col.offsets[level].values.data); ln != 0 {
+			offset += col.offsets[level].values.data[ln-1]
 		}
-		col.offsets[level].values = append(col.offsets[level].values, offset)
+		col.offsets[level].values.data = append(col.offsets[level].values.data, offset)
 		for i := 0; i < elem.Len(); i++ {
 			if err := col.append(elem.Index(i), level+1); err != nil {
 				return err
@@ -181,8 +186,8 @@ func (col *Array) Decode(decoder *binary.Decoder, rows int) error {
 			return err
 		}
 		switch {
-		case len(offset.values) > 0:
-			rows = int(offset.values[len(offset.values)-1])
+		case len(offset.values.data) > 0:
+			rows = int(offset.values.data[len(offset.values.data)-1])
 		default:
 			rows = 0
 		}
@@ -220,11 +225,11 @@ func (col *Array) WriteStatePrefix(encoder *binary.Encoder) error {
 func (col *Array) make(row uint64, level int) reflect.Value {
 	offset := col.offsets[level]
 	var (
-		end   = offset.values[row]
+		end   = offset.values.data[row]
 		start = uint64(0)
 	)
 	if row > 0 {
-		start = offset.values[row-1]
+		start = offset.values.data[row-1]
 	}
 	var (
 		base  = offset.scanType.Elem()
@@ -247,6 +252,85 @@ func (col *Array) make(row uint64, level int) reflect.Value {
 		slice = reflect.Append(slice, value)
 	}
 	return slice
+}
+
+func (col *Array) scanJSONSlice(jsonSlice reflect.Value, row int) error {
+	kind := jsonSlice.Kind()
+	if kind != reflect.Slice {
+		return &ColumnConverterError{
+			Op:   "ScanRow",
+			To:   fmt.Sprintf("%T", jsonSlice),
+			From: string(col.Type()),
+		}
+	}
+	// check if we have an array(tuple. This represents a nested.
+	tCol, ok := col.values.(*Tuple)
+	if !ok {
+		// if it is not an array of tuples it will be an array of primitives in json
+		value := reflect.ValueOf(col.Row(row, false))
+		if value.CanConvert(jsonSlice.Type()) {
+			jsonSlice.Set(value.Convert(jsonSlice.Type()))
+			return nil
+		}
+		return &ColumnConverterError{
+			Op:   "ScanRow",
+			To:   fmt.Sprintf("%T", jsonSlice),
+			From: value.Type().String(),
+		}
+	}
+	// Array(Tuple so depth 1 for JSON
+	offset := col.offsets[0]
+	var (
+		end   = offset.values.data[row]
+		start = uint64(0)
+	)
+	if row > 0 {
+		start = offset.values.data[row-1]
+	}
+	if end-start > 0 {
+		slice := reflect.MakeSlice(jsonSlice.Type(), int(end-start), int(end-start))
+		si := 0
+		for i := start; i < end; i++ {
+			sStruct := reflect.New(slice.Type().Elem()).Elem()
+			v := slice.Index(si)
+			for _, c := range tCol.columns {
+				sField, ok := getFieldValue(sStruct, c.Name())
+				if !ok {
+					return &Error{
+						ColumnType: fmt.Sprint(c.Type()),
+						Err:        fmt.Errorf("column %s is not present in the struct %s  - only JSON structures are supported", c.Name(), sStruct),
+					}
+				}
+				switch d := c.(type) {
+				case *Tuple:
+					err := d.scanJSONStruct(sField, int(i))
+					if err != nil {
+						return err
+					}
+				case *Array:
+					err := d.scanJSONSlice(sField, int(i))
+					if err != nil {
+						return err
+					}
+				default:
+					value := reflect.ValueOf(c.Row(int(i), false))
+					if value.CanConvert(sField.Type()) {
+						sField.Set(value.Convert(sField.Type()))
+					} else {
+						return &ColumnConverterError{
+							Op:   "ScanRow",
+							To:   fmt.Sprintf("%T", sField),
+							From: string(col.Type()),
+						}
+					}
+				}
+			}
+			v.Set(sStruct)
+			si++
+		}
+		jsonSlice.Set(slice)
+	}
+	return nil
 }
 
 var (
