@@ -2,6 +2,8 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -55,7 +57,9 @@ type InconsistentGithubEvent struct {
 	Contributors []InconsistentAccount
 }
 
-func TestJSON(t *testing.T) {
+var now, _ = time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", "2022-05-25 17:20:57 +0100 WEST")
+
+func TestSimpleJSON(t *testing.T) {
 	var (
 		ctx       = context.Background()
 		conn, err = clickhouse.Open(&clickhouse.Options{
@@ -78,46 +82,85 @@ func TestJSON(t *testing.T) {
 		}()
 		if err := conn.Exec(ctx, ddl); assert.NoError(t, err) {
 			if batch, err := conn.PrepareBatch(ctx, "INSERT INTO json_test"); assert.NoError(t, err) {
+				col1Data := Releases{Version: "2.0.0"}
+				assert.NoError(t, batch.Append(col1Data))
+				if assert.NoError(t, batch.Send()) {
+					var (
+						col1 Releases
+					)
+					if err := conn.QueryRow(ctx, "SELECT * FROM json_test").Scan(&col1); assert.NoError(t, err) {
+						assert.Equal(t, col1Data, col1)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestJSON(t *testing.T) {
+	var (
+		ctx       = context.Background()
+		conn, err = clickhouse.Open(&clickhouse.Options{
+			Addr:        []string{"127.0.0.1:9000"},
+			DialTimeout: time.Hour,
+			Auth: clickhouse.Auth{
+				Database: "default",
+				Username: "default",
+				Password: "",
+			}, Settings: clickhouse.Settings{
+				"allow_experimental_object_type": 1,
+			},
+		})
+	)
+	conn.Exec(ctx, "DROP TABLE json_test")
+	ddl := `CREATE table json_test(event JSON) ENGINE=Memory;`
+	if assert.NoError(t, err) {
+
+		if err := conn.Exec(ctx, ddl); assert.NoError(t, err) {
+			if batch, err := conn.PrepareBatch(ctx, "INSERT INTO json_test"); assert.NoError(t, err) {
 				col1Data := GithubEvent{
 					Title: "Document JSON support",
 					Type:  "Issue",
 					Assignee: Account{
 						Id:            1244,
 						Name:          "Geoff",
-						Achievement:   Achievement{Name: "Mars Star", AwardedDate: time.Now().Truncate(time.Second)},
+						Achievement:   Achievement{Name: "Mars Star", AwardedDate: now.Truncate(time.Second)},
 						Repositories:  []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
 						Organizations: []string{"Support Engineer", "Integrations"},
 					},
 					Labels: []string{"Help wanted"},
 					Contributors: []Account{
-						{Id: 2244, Achievement: Achievement{Name: "Adding JSON to go driver", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"Support Engineer", "Consulting", "PM", "Integrations"}, Name: "Dale", Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}, {URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.2.0"}, {Version: "1.3.0"}}}}},
-						{Id: 2344, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -700)}, Organizations: []string{"Support Engineer", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.4.0"}}}}},
-					},
-				}
-				col2Data := GithubEvent{
-					Title: "JSON support",
-					Type:  "Pull Request",
-					Assignee: Account{
-						Id:            2244,
-						Name:          "Dale",
-						Achievement:   Achievement{Name: "Arctic Vault", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -1000)},
-						Repositories:  []Repository{{URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.4.0"}, {Version: "1.6.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
-						Organizations: []string{"Support Engineer", "Integrations"},
-					},
-					Labels: []string{"Bug"},
-					Contributors: []Account{
-						{Id: 1244, Name: "Geoff", Achievement: Achievement{Name: "Mars Star", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -3000)}, Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}}, Organizations: []string{"Support Engineer", "Integrations"}},
-						{Id: 2244, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"ClickHouse", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.3.0"}}}}},
+						{Id: 2244, Achievement: Achievement{Name: "Adding JSON to go driver", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"Support Engineer", "Consulting", "PM", "Integrations"}, Name: "Dale", Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}, {URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.2.0"}, {Version: "1.3.0"}}}}},
+						{Id: 2344, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -700)}, Organizations: []string{"Support Engineer", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.4.0"}}}}},
 					},
 				}
 
+				/*				col2Data := GithubEvent{
+								Title: "JSON support",
+								Type:  "Pull Request",
+								Assignee: Account{
+									Id:            2244,
+									Name:          "Dale",
+									Achievement:   Achievement{Name: "Arctic Vault", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -1000)},
+									Repositories:  []Repository{{URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.4.0"}, {Version: "1.6.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
+									Organizations: []string{"Support Engineer", "Integrations"},
+								},
+								Labels: []string{"Bug"},
+								Contributors: []Account{
+									{Id: 1244, Name: "Geoff", Achievement: Achievement{Name: "Mars Star", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -3000)}, Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}}, Organizations: []string{"Support Engineer", "Integrations"}},
+									{Id: 2244, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"ClickHouse", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.3.0"}}}}},
+								},
+							}*/
+
 				assert.NoError(t, batch.Append(col1Data))
-				assert.NoError(t, batch.Append(col2Data))
+				//assert.NoError(t, batch.Append(col2Data))
 				if assert.NoError(t, batch.Send()) {
 					var (
 						col1 GithubEvent
 					)
 					if err := conn.QueryRow(ctx, "SELECT * FROM json_test").Scan(&col1); assert.NoError(t, err) {
+						bytes, _ := json.Marshal(col1)
+						fmt.Println(string(bytes))
 						assert.Equal(t, col1Data, col1)
 					}
 				}
@@ -127,7 +170,127 @@ func TestJSON(t *testing.T) {
 
 }
 
-func TestJSONImitate(t *testing.T) {
+func TestJSONConvert(t *testing.T) {
+	col1Data := GithubEvent{
+		Title: "Document JSON support",
+		Type:  "Issue",
+		Assignee: Account{
+			Id:            1244,
+			Name:          "Geoff",
+			Achievement:   Achievement{Name: "Mars Star", AwardedDate: now.Truncate(time.Second)},
+			Repositories:  []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
+			Organizations: []string{"Support Engineer", "Integrations"},
+		},
+		Labels: []string{"Help wanted"},
+		Contributors: []Account{
+			{Id: 2244, Achievement: Achievement{Name: "Adding JSON to go driver", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"Support Engineer", "Consulting", "PM", "Integrations"}, Name: "Dale", Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}, {URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.2.0"}, {Version: "1.3.0"}}}}},
+			{Id: 2344, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -700)}, Organizations: []string{"Support Engineer", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.4.0"}}}}},
+		},
+	}
+	bytes, _ := json.Marshal(col1Data)
+	fmt.Println(string(bytes))
+}
+
+func TestJSONStructQuery(t *testing.T) {
+
+	var (
+		ctx       = context.Background()
+		conn, err = clickhouse.Open(&clickhouse.Options{
+			Addr:        []string{"127.0.0.1:9000"},
+			DialTimeout: time.Hour,
+			Auth: clickhouse.Auth{
+				Database: "default",
+				Username: "default",
+				Password: "",
+			}, Settings: clickhouse.Settings{
+				"flatten_nested": 1,
+			},
+		})
+	)
+	conn.Exec(ctx, "DROP TABLE json_test")
+	defer func() {
+		conn.Exec(ctx, "DROP TABLE json_test")
+	}()
+
+	ddl := `CREATE table json_test(
+				event Tuple(Title String, 
+							Type String, 
+							assignee Tuple(Id UInt64, Name String, orgs Array(String), Repositories Nested(url String, Releases Nested(Version String)), Achievement Tuple(Name String, AwardedDate String)), 
+							labels Array(String), 
+							Contributors Nested(Id UInt64, Name String, orgs Array(String), Repositories Nested(url String, Releases Nested(Version String)), Achievement Tuple(Name String, AwardedDate String)))
+			) ENGINE=Memory;`
+	if assert.NoError(t, err) {
+		if err := conn.Exec(ctx, ddl); assert.NoError(t, err) {
+
+			col1Data := []interface{}{
+				"Document JSON support",
+				"Issue",
+				[]interface{}{
+					uint64(1244),
+					"Geoff",
+					[]string{"Support Engineer", "Integrations"},
+					[][]interface{}{
+						{"https://github.com/ClickHouse/clickhouse-python", [][]interface{}{{"1.0.0"}, {"1.1.0"}}},
+						{"https://github.com/ClickHouse/clickhouse-go", [][]interface{}{{"2.0.0"}, {"2.1.0"}}},
+					},
+					[]interface{}{"Mars Star", now.Truncate(time.Second).String()},
+				},
+				[]string{"Help wanted"},
+				[][]interface{}{
+					{
+						uint64(2244),
+						"Dale",
+						[]string{"Support Engineer", "Consulting", "PM", "Integrations"},
+						[][]interface{}{
+							{"https://github.com/ClickHouse/clickhouse-go", [][]interface{}{{"2.0.0"}, {"2.1.0"}}},
+							{"https://github.com/grafana/clickhouse", [][]interface{}{{"1.2.0"}, {"1.3.0"}}},
+						},
+						[]interface{}{"Adding JSON to go driver", now.Truncate(time.Second).Add(time.Hour * -500).String()},
+					},
+					{
+						uint64(2344),
+						"Melyvn",
+						[]string{"Support Engineer", "Consulting"},
+						[][]interface{}{
+							{"https://github.com/ClickHouse/support", [][]interface{}{{"1.0.0"}, {"2.3.0"}, {"2.4.0"}}},
+						},
+						[]interface{}{"Managing S3 buckets", now.Truncate(time.Second).Add(time.Hour * -700).String()},
+					},
+				},
+			}
+
+			if batch, err := conn.PrepareBatch(ctx, "INSERT INTO json_test"); assert.NoError(t, err) {
+				assert.NoError(t, batch.Append(col1Data))
+				if assert.NoError(t, batch.Send()) {
+					var (
+						col1 GithubEvent
+					)
+					sCol1 := GithubEvent{
+						Title: "Document JSON support",
+						Type:  "Issue",
+						Assignee: Account{
+							Id:            1244,
+							Name:          "Geoff",
+							Achievement:   Achievement{Name: "Mars Star", AwardedDate: now.Truncate(time.Second)},
+							Repositories:  []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
+							Organizations: []string{"Support Engineer", "Integrations"},
+						},
+						Labels: []string{"Help wanted"},
+						Contributors: []Account{
+							{Id: 2244, Achievement: Achievement{Name: "Adding JSON to go driver", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"Support Engineer", "Consulting", "PM", "Integrations"}, Name: "Dale", Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}, {URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.2.0"}, {Version: "1.3.0"}}}}},
+							{Id: 2344, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -700)}, Organizations: []string{"Support Engineer", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.4.0"}}}}},
+						},
+					}
+					if err := conn.QueryRow(ctx, "SELECT * FROM json_test").Scan(&col1); assert.NoError(t, err) {
+						assert.Equal(t, sCol1, col1)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestJSONMapQuery(t *testing.T) {
 
 	var (
 		ctx       = context.Background()
@@ -157,22 +320,6 @@ func TestJSONImitate(t *testing.T) {
 	if assert.NoError(t, err) {
 		if err := conn.Exec(ctx, ddl); assert.NoError(t, err) {
 
-			sCol1 := GithubEvent{
-				Title: "Document JSON support",
-				Type:  "Issue",
-				Assignee: Account{
-					Id:            1244,
-					Name:          "Geoff",
-					Achievement:   Achievement{Name: "Mars Star", AwardedDate: time.Now().Truncate(time.Second)},
-					Repositories:  []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
-					Organizations: []string{"Support Engineer", "Integrations"},
-				},
-				Labels: []string{"Help wanted"},
-				Contributors: []Account{
-					{Id: 2244, Achievement: Achievement{Name: "Adding JSON to go driver", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"Support Engineer", "Consulting", "PM", "Integrations"}, Name: "Dale", Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}, {URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.2.0"}, {Version: "1.3.0"}}}}},
-					{Id: 2344, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: time.Now().Truncate(time.Second).Add(time.Hour * -700)}, Organizations: []string{"Support Engineer", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.4.0"}}}}},
-				},
-			}
 			col1Data := []interface{}{
 				"Document JSON support",
 				"Issue",
@@ -184,7 +331,7 @@ func TestJSONImitate(t *testing.T) {
 						{"https://github.com/ClickHouse/clickhouse-python", [][]interface{}{{"1.0.0"}, {"1.1.0"}}},
 						{"https://github.com/ClickHouse/clickhouse-go", [][]interface{}{{"2.0.0"}, {"2.1.0"}}},
 					},
-					[]interface{}{"Mars Star", time.Now().Truncate(time.Second).String()},
+					[]interface{}{"Mars Star", now.Truncate(time.Second).String()},
 				},
 				[]string{"Help wanted"},
 				[][]interface{}{
@@ -196,7 +343,7 @@ func TestJSONImitate(t *testing.T) {
 							{"https://github.com/ClickHouse/clickhouse-go", [][]interface{}{{"2.0.0"}, {"2.1.0"}}},
 							{"https://github.com/grafana/clickhouse", [][]interface{}{{"1.2.0"}, {"1.3.0"}}},
 						},
-						[]interface{}{"Adding JSON to go driver", time.Now().Truncate(time.Second).Add(time.Hour * -500).String()},
+						[]interface{}{"Adding JSON to go driver", now.Truncate(time.Second).Add(time.Hour * -500).String()},
 					},
 					{
 						uint64(2344),
@@ -205,17 +352,33 @@ func TestJSONImitate(t *testing.T) {
 						[][]interface{}{
 							{"https://github.com/ClickHouse/support", [][]interface{}{{"1.0.0"}, {"2.3.0"}, {"2.4.0"}}},
 						},
-						[]interface{}{"Managing S3 buckets", time.Now().Truncate(time.Second).Add(time.Hour * -700).String()},
+						[]interface{}{"Managing S3 buckets", now.Truncate(time.Second).Add(time.Hour * -700).String()},
 					},
 				},
 			}
 
 			if batch, err := conn.PrepareBatch(ctx, "INSERT INTO json_test"); assert.NoError(t, err) {
 				assert.NoError(t, batch.Append(col1Data))
-				var (
-					col1 GithubEvent
-				)
 				if assert.NoError(t, batch.Send()) {
+					var (
+						col1 GithubEvent
+					)
+					sCol1 := GithubEvent{
+						Title: "Document JSON support",
+						Type:  "Issue",
+						Assignee: Account{
+							Id:            1244,
+							Name:          "Geoff",
+							Achievement:   Achievement{Name: "Mars Star", AwardedDate: now.Truncate(time.Second)},
+							Repositories:  []Repository{{URL: "https://github.com/ClickHouse/clickhouse-python", Releases: []Releases{{Version: "1.0.0"}, {Version: "1.1.0"}}}, {URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}},
+							Organizations: []string{"Support Engineer", "Integrations"},
+						},
+						Labels: []string{"Help wanted"},
+						Contributors: []Account{
+							{Id: 2244, Achievement: Achievement{Name: "Adding JSON to go driver", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -500)}, Organizations: []string{"Support Engineer", "Consulting", "PM", "Integrations"}, Name: "Dale", Repositories: []Repository{{URL: "https://github.com/ClickHouse/clickhouse-go", Releases: []Releases{{Version: "2.0.0"}, {Version: "2.1.0"}}}, {URL: "https://github.com/grafana/clickhouse", Releases: []Releases{{Version: "1.2.0"}, {Version: "1.3.0"}}}}},
+							{Id: 2344, Achievement: Achievement{Name: "Managing S3 buckets", AwardedDate: now.Truncate(time.Second).Add(time.Hour * -700)}, Organizations: []string{"Support Engineer", "Consulting"}, Name: "Melyvn", Repositories: []Repository{{URL: "https://github.com/ClickHouse/support", Releases: []Releases{{Version: "1.0.0"}, {Version: "2.3.0"}, {Version: "2.4.0"}}}}},
+						},
+					}
 					if err := conn.QueryRow(ctx, "SELECT * FROM json_test").Scan(&col1); assert.NoError(t, err) {
 						assert.Equal(t, sCol1, col1)
 					}
@@ -228,8 +391,7 @@ func TestJSONImitate(t *testing.T) {
 /*To test:
 
 NEXT:
-1. non exported type
-
+List of special types and multiple rows
 1. Inconsistent types ( Non castable)
 2. Castablae types
 3. Inconsistent Structure
@@ -244,4 +406,5 @@ NEXT:
 12. Big Int
 13. Test point
 14. Null types
+15. Column support
 */

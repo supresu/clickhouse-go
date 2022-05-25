@@ -220,6 +220,8 @@ func (col *Tuple) ScanRow(dest interface{}, row int) error {
 			tuple = append(tuple, c.Row(row, false))
 		}
 		*d = tuple
+	case map[string]interface{}:
+		//supported for JSON - requires named tuples
 	default:
 		kind := reflect.Indirect(reflect.ValueOf(dest)).Kind()
 		if kind != reflect.Struct {

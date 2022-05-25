@@ -308,7 +308,7 @@ func (col *Array) scanJSONSlice(jsonSlice reflect.Value, row int) error {
 						return err
 					}
 				default:
-					err := setStructValue(sField, c, row)
+					err := setStructValue(sField, c, int(i))
 					if err != nil {
 						return err
 					}

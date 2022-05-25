@@ -136,18 +136,18 @@ func parseSliceStruct(name string, structVal reflect.Value, jCol JSON, first boo
 		kind := field.Kind()
 		value := field.Interface()
 		fType := field.Type()
-		if _, ok := typeMappings[fType.String()]; ok {
+		if kind == reflect.Slice {
+			err := parseSlice(fName, value, col)
+			if err != nil {
+				return err
+			}
+		} else if _, ok := typeMappings[fType.String()]; ok {
 			err := parseType(fName, fType, value, false, col)
 			if err != nil {
 				return err
 			}
 		} else if kind == reflect.Struct {
 			err := parseStruct(fName, field, col)
-			if err != nil {
-				return err
-			}
-		} else if kind == reflect.Slice {
-			err := parseSlice(fName, value, col)
 			if err != nil {
 				return err
 			}
@@ -209,18 +209,18 @@ func parseStruct(name string, structVal reflect.Value, jCol JSON) error {
 		kind := field.Kind()
 		value := field.Interface()
 		fType := field.Type()
-		if _, ok := typeMappings[fType.String()]; ok {
+		if kind == reflect.Slice {
+			err := parseSlice(fName, value, col)
+			if err != nil {
+				return err
+			}
+		} else if _, ok := typeMappings[fType.String()]; ok {
 			err := parseType(fName, fType, value, false, col)
 			if err != nil {
 				return err
 			}
 		} else if kind == reflect.Struct {
 			err = parseStruct(fName, field, col)
-			if err != nil {
-				return err
-			}
-		} else if kind == reflect.Slice {
-			err := parseSlice(fName, value, col)
 			if err != nil {
 				return err
 			}
@@ -251,13 +251,19 @@ func appendStruct(jCol *JSONObject, data interface{}) error {
 			}
 			kind := field.Kind()
 			value := field.Interface()
-			if kind == reflect.Struct {
-				err := parseStruct(fName, field, jCol)
+			fType := field.Type()
+			if kind == reflect.Slice {
+				err := parseSlice(fName, value, jCol)
 				if err != nil {
 					return err
 				}
-			} else if kind == reflect.Slice {
-				err := parseSlice(fName, value, jCol)
+			} else if _, ok := typeMappings[fType.String()]; ok {
+				err := parseType(fName, fType, value, false, jCol)
+				if err != nil {
+					return err
+				}
+			} else if kind == reflect.Struct {
+				err := parseStruct(fName, field, jCol)
 				if err != nil {
 					return err
 				}
@@ -484,6 +490,13 @@ func (jCol *JSONObject) upsertObject(name string) (*JSONObject, error) {
 }
 
 func (jCol *JSONObject) Type() Type {
+	if jCol.root {
+		return "Object('json')"
+	}
+	return jCol.FullType()
+}
+
+func (jCol *JSONObject) FullType() Type {
 	subTypes := make([]string, len(jCol.columns))
 	for i, v := range jCol.columns {
 		subTypes[i] = string(v.Type())
@@ -533,6 +546,12 @@ func (jCol *JSONObject) Decode(decoder *binary.Decoder, rows int) error {
 }
 
 func (jCol *JSONObject) Encode(encoder *binary.Encoder) error {
+	if jCol.root {
+		err := encoder.String(string(jCol.FullType()))
+		if err != nil {
+			return err
+		}
+	}
 	for _, c := range jCol.columns {
 		if err := c.Encode(encoder); err != nil {
 			return err
@@ -542,25 +561,12 @@ func (jCol *JSONObject) Encode(encoder *binary.Encoder) error {
 }
 
 func (jCol *JSONObject) ReadStatePrefix(decoder *binary.Decoder) error {
-	for _, c := range jCol.columns {
-		if serialize, ok := c.(CustomSerialization); ok {
-			if err := serialize.ReadStatePrefix(decoder); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	_, err := decoder.UInt8()
+	return err
 }
 
 func (jCol *JSONObject) WriteStatePrefix(encoder *binary.Encoder) error {
-	for _, c := range jCol.columns {
-		if serialize, ok := c.(CustomSerialization); ok {
-			if err := serialize.WriteStatePrefix(encoder); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return encoder.UInt8(0)
 }
 
 var (
