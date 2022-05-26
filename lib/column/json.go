@@ -406,9 +406,10 @@ func (jCol *JSONList) Type() Type {
 }
 
 type JSONObject struct {
-	columns []Interface
-	name    string
-	root    bool
+	columns  []Interface
+	name     string
+	root     bool
+	encoding uint8
 }
 
 func (jCol *JSONObject) Name() string {
@@ -533,13 +534,35 @@ func (jCol *JSONObject) Append(_ interface{}) (nulls []uint8, err error) {
 
 func (jCol *JSONObject) AppendRow(v interface{}) error {
 	if reflect.ValueOf(v).Kind() == reflect.Struct {
-		jCol.root = true
+		if jCol.columns != nil && jCol.encoding == 1 {
+			return &Error{
+				ColumnType: fmt.Sprint(jCol.Type()),
+				Err:        fmt.Errorf("encoding of JSON columns cannot be mixed in a batch - %s cannot be added as previously String", reflect.ValueOf(v).Kind()),
+			}
+		}
 		return appendStruct(jCol, v)
 	}
-	return &Error{
-		ColumnType: fmt.Sprint(reflect.ValueOf(v).Kind()),
-		Err:        fmt.Errorf("unsupported error"),
+	switch v := v.(type) {
+	case string:
+		if jCol.columns != nil && jCol.encoding == 0 {
+			return &Error{
+				ColumnType: fmt.Sprint(jCol.Type()),
+				Err:        fmt.Errorf("encoding of JSON columns cannot be mixed in a batch - %s cannot be added as previously Struct", reflect.ValueOf(v).Kind()),
+			}
+		}
+		jCol.encoding = 1
+		if jCol.columns == nil {
+			jCol.columns = append(jCol.columns, &String{})
+		}
+		jCol.columns[0].AppendRow(v)
+	default:
+		return &ColumnConverterError{
+			Op:   "AppendRow",
+			To:   "String",
+			From: fmt.Sprintf("%T", v),
+		}
 	}
+	return nil
 }
 
 func (jCol *JSONObject) Decode(decoder *binary.Decoder, rows int) error {
@@ -547,7 +570,7 @@ func (jCol *JSONObject) Decode(decoder *binary.Decoder, rows int) error {
 }
 
 func (jCol *JSONObject) Encode(encoder *binary.Encoder) error {
-	if jCol.root {
+	if jCol.root && jCol.encoding == 0 {
 		err := encoder.String(string(jCol.FullType()))
 		if err != nil {
 			return err
@@ -567,7 +590,7 @@ func (jCol *JSONObject) ReadStatePrefix(decoder *binary.Decoder) error {
 }
 
 func (jCol *JSONObject) WriteStatePrefix(encoder *binary.Encoder) error {
-	return encoder.UInt8(0)
+	return encoder.UInt8(jCol.encoding)
 }
 
 var (

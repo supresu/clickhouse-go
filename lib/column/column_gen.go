@@ -130,7 +130,7 @@ func (t Type) Column(name string) (Interface, error) {
 	case "String":
 		return &String{name: name}, nil
 	case "Object('json')":
-		return &JSONObject{name: name}, nil
+		return &JSONObject{name: name, root: true}, nil
 	}
 
 	switch strType := string(t); {
