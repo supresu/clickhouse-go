@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"log"
+	"net"
 	"testing"
 	"time"
 )
@@ -187,6 +188,56 @@ func TestJSONDecimal(t *testing.T) {
 					)
 					if err := conn.QueryRow(ctx, "SELECT * FROM json_test").Scan(&col1); assert.NoError(t, err) {
 						assert.Equal(t, col1Data, col1)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestJSONIP(t *testing.T) {
+	type Login struct {
+		Username string `json:"username"`
+		IP       net.IP `json:"ip_address"`
+		Row      uint8
+	}
+	var (
+		ctx       = context.Background()
+		conn, err = clickhouse.Open(&clickhouse.Options{
+			Addr:        []string{"127.0.0.1:9000"},
+			DialTimeout: time.Hour,
+			Auth: clickhouse.Auth{
+				Database: "default",
+				Username: "default",
+				Password: "",
+			}, Settings: clickhouse.Settings{
+				"allow_experimental_object_type": 1,
+			},
+		})
+	)
+	conn.Exec(ctx, "DROP TABLE json_test")
+	ddl := `CREATE table json_test(event JSON) ENGINE=Memory;`
+	if assert.NoError(t, err) {
+		defer func() {
+			conn.Exec(ctx, "DROP TABLE json_test")
+		}()
+		if err := conn.Exec(ctx, ddl); assert.NoError(t, err) {
+			if batch, err := conn.PrepareBatch(ctx, "INSERT INTO json_test"); assert.NoError(t, err) {
+				col1Data := Login{Username: "Gingerwizard", IP: net.ParseIP("85.242.48.167"), Row: 0}
+				col2Data := Login{Username: "genzgd", Row: 1}
+				assert.NoError(t, batch.Append(col1Data))
+				assert.NoError(t, batch.Append(col2Data))
+				if assert.NoError(t, batch.Send()) {
+					var (
+						event Login
+					)
+					i := 0
+					if err := conn.QueryRow(ctx, "SELECT * FROM json_test ORDER BY event.Row ASC").Scan(&event); assert.NoError(t, err) {
+						if i == 0 {
+							assert.Equal(t, col1Data, event)
+						} else {
+							assert.Equal(t, col2Data, event)
+						}
 					}
 				}
 			}
@@ -576,7 +627,7 @@ Embedding
 
 Types to go:
 
-10. test ip and uuid
+10. UUID
 11. Typed maps
 12. Point
 12. Big Int

@@ -44,9 +44,10 @@ var kindMappings = map[reflect.Kind]string{
 
 // complex types for which a mapping exists
 var typeMappings = map[string]string{
-	// currently JSON doesn't support DateTime, Decimal so mapped to string
+	// currently JSON doesn't support DateTime, Decimal or IP so mapped to String
 	"time.Time":       "String",
 	"decimal.Decimal": "String",
+	"net.IP":          "String",
 }
 
 type JSON interface {
@@ -210,13 +211,13 @@ func parseStruct(name string, structVal reflect.Value, jCol JSON) error {
 		kind := field.Kind()
 		value := field.Interface()
 		fType := field.Type()
-		if kind == reflect.Slice {
-			err := parseSlice(fName, value, col)
+		if _, ok := typeMappings[fType.String()]; ok {
+			err := parseType(fName, fType, value, false, col)
 			if err != nil {
 				return err
 			}
-		} else if _, ok := typeMappings[fType.String()]; ok {
-			err := parseType(fName, fType, value, false, col)
+		} else if kind == reflect.Slice {
+			err := parseSlice(fName, value, col)
 			if err != nil {
 				return err
 			}
@@ -253,13 +254,13 @@ func appendStruct(jCol *JSONObject, data interface{}) error {
 			kind := field.Kind()
 			value := field.Interface()
 			fType := field.Type()
-			if kind == reflect.Slice {
-				err := parseSlice(fName, value, jCol)
+			if _, ok := typeMappings[fType.String()]; ok {
+				err := parseType(fName, fType, value, false, jCol)
 				if err != nil {
 					return err
 				}
-			} else if _, ok := typeMappings[fType.String()]; ok {
-				err := parseType(fName, fType, value, false, jCol)
+			} else if kind == reflect.Slice {
+				err := parseSlice(fName, value, jCol)
 				if err != nil {
 					return err
 				}

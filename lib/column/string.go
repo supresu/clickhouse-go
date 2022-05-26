@@ -20,6 +20,7 @@ package column
 import (
 	"fmt"
 	"github.com/shopspring/decimal"
+	"net"
 	"reflect"
 	"time"
 
@@ -99,6 +100,11 @@ func (col *String) Append(v interface{}) (nulls []uint8, err error) {
 			// currently no way to distinguish if decimal is uninitialized null or just null https://github.com/shopspring/decimal/issues/219
 			col.data = append(col.data, v[i].String())
 		}
+	case []net.IP:
+		nulls = make([]uint8, len(v))
+		for i := range v {
+			col.data = append(col.data, v[i].String())
+		}
 	default:
 		return nil, &ColumnConverterError{
 			Op:   "Append",
@@ -127,6 +133,8 @@ func (col *String) AppendRow(v interface{}) error {
 		col.data = append(col.data, v.String())
 	case decimal.Decimal:
 		// currently no way to distinguish if decimal is uninitialized null or just null https://github.com/shopspring/decimal/issues/219
+		col.data = append(col.data, v.String())
+	case net.IP:
 		col.data = append(col.data, v.String())
 	default:
 		return &ColumnConverterError{

@@ -20,6 +20,7 @@ package column
 import (
 	"fmt"
 	"github.com/shopspring/decimal"
+	"net"
 	"reflect"
 	"strings"
 	"time"
@@ -121,10 +122,6 @@ func (col *Tuple) Row(i int, ptr bool) interface{} {
 
 func setStructValue(field reflect.Value, c Interface, row int) error {
 	value := reflect.ValueOf(c.Row(row, false))
-	if value.CanConvert(field.Type()) {
-		field.Set(value.Convert(field.Type()))
-		return nil
-	}
 	// attempt to convert known types
 	switch field.Interface().(type) {
 	case time.Time:
@@ -159,10 +156,22 @@ func setStructValue(field reflect.Value, c Interface, row int) error {
 			field.Set(reflect.ValueOf(val))
 			return nil
 		}
+	case net.IP:
+		if c.Type() == "String" {
+			sValue := value.Interface().(string)
+			field.Set(reflect.ValueOf(net.ParseIP(sValue)))
+			return nil
+		}
 	}
+	// fall back to best effort
+	if value.CanConvert(field.Type()) {
+		field.Set(value.Convert(field.Type()))
+		return nil
+	}
+
 	return &ColumnConverterError{
 		Op:   "ScanRow",
-		To:   fmt.Sprintf("%T", field),
+		To:   fmt.Sprintf("%T", field.Interface()),
 		From: value.Type().String(),
 	}
 
