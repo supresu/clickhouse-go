@@ -39,8 +39,7 @@ func TestSimpleFloat(t *testing.T) {
 		if err := conn.Exec(ctx, ddl); assert.NoError(t, err) {
 			if batch, err := conn.PrepareBatch(ctx, "INSERT INTO test_float"); assert.NoError(t, err) {
 				if err := batch.Append(float32(33.1221)); assert.NoError(t, err) {
-					if assert.NoError(t, batch.Send()) {
-					}
+					assert.NoError(t, batch.Send())
 				}
 			}
 		}

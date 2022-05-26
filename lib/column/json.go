@@ -44,8 +44,9 @@ var kindMappings = map[reflect.Kind]string{
 
 // complex types for which a mapping exists
 var typeMappings = map[string]string{
-	// currently JSON doesn't support dates so mapped to string
-	"time.Time": "String",
+	// currently JSON doesn't support DateTime, Decimal so mapped to string
+	"time.Time":       "String",
+	"decimal.Decimal": "String",
 }
 
 type JSON interface {

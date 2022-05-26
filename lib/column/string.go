@@ -19,6 +19,7 @@ package column
 
 import (
 	"fmt"
+	"github.com/shopspring/decimal"
 	"reflect"
 	"time"
 
@@ -86,9 +87,16 @@ func (col *String) Append(v interface{}) (nulls []uint8, err error) {
 				col.data, nulls[i] = append(col.data, ""), 1
 			}
 		}
+	// following mainly for JSON support
 	case []time.Time:
 		nulls = make([]uint8, len(v))
 		for i := range v {
+			col.data = append(col.data, v[i].String())
+		}
+	case []decimal.Decimal:
+		nulls = make([]uint8, len(v))
+		for i := range v {
+			// currently no way to distinguish if decimal is uninitialized null or just null https://github.com/shopspring/decimal/issues/219
 			col.data = append(col.data, v[i].String())
 		}
 	default:
@@ -112,10 +120,14 @@ func (col *String) AppendRow(v interface{}) error {
 		default:
 			col.data = append(col.data, "")
 		}
-	case time.Time:
-		col.data = append(col.data, v.String())
 	case nil:
 		col.data = append(col.data, "")
+	// following mainly for JSON support
+	case time.Time:
+		col.data = append(col.data, v.String())
+	case decimal.Decimal:
+		// currently no way to distinguish if decimal is uninitialized null or just null https://github.com/shopspring/decimal/issues/219
+		col.data = append(col.data, v.String())
 	default:
 		return &ColumnConverterError{
 			Op:   "AppendRow",

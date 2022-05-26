@@ -19,6 +19,7 @@ package column
 
 import (
 	"fmt"
+	"github.com/shopspring/decimal"
 	"reflect"
 	"strings"
 	"time"
@@ -137,15 +138,33 @@ func setStructValue(field reflect.Value, c Interface, row int) error {
 				}
 			}
 			field.Set(reflect.ValueOf(val))
+			return nil
 		}
-	default:
-		return &ColumnConverterError{
-			Op:   "ScanRow",
-			To:   fmt.Sprintf("%T", field),
-			From: value.Type().String(),
+
+	case decimal.Decimal:
+		if c.Type() == "String" {
+			sValue := value.Interface().(string)
+			var val decimal.Decimal
+			if sValue == "" {
+				field.Set(reflect.ValueOf(val))
+				return nil
+			}
+			val, err := decimal.NewFromString(sValue)
+			if err != nil {
+				return &Error{
+					ColumnType: fmt.Sprint(c.Type()),
+					Err:        fmt.Errorf("column %s is a string but cannot be parsed into a decimal.Decimal - %s", c.Name(), err),
+				}
+			}
+			field.Set(reflect.ValueOf(val))
+			return nil
 		}
 	}
-	return nil
+	return &ColumnConverterError{
+		Op:   "ScanRow",
+		To:   fmt.Sprintf("%T", field),
+		From: value.Type().String(),
+	}
 
 }
 
