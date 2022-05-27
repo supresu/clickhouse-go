@@ -31,7 +31,7 @@ const (
 	ClientVersionMajor       = 1
 	ClientVersionMinor       = 1
 	// ClientTCPProtocolVersion = DBMS_TCP_PROTOCOL_VERSION
-	ClientTCPProtocolVersion = 54213 // TODO
+	ClientTCPProtocolVersion = DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO // TODO
 )
 
 type ClientHandshake struct{}

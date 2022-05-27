@@ -40,7 +40,6 @@ func (c *connect) sendQuery(body string, o *QueryOptions) error {
 	if err := q.Encode(c.encoder, c.revision); err != nil {
 		return err
 	}
-	c.debugf("[send query] encoder=%+v", c.encoder) // TODO
 	for _, table := range o.external {
 		if err := c.sendData(table.Block(), table.Name()); err != nil {
 			return err
