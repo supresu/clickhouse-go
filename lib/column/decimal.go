@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/binary"
+	"github.com/supresu/clickhouse-go/v2/lib/binary"
 	"github.com/shopspring/decimal"
 )
 

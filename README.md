@@ -103,7 +103,7 @@ clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms
 ## Install
 
 ```sh
-go get -u github.com/ClickHouse/clickhouse-go/v2
+go get -u github.com/supresu/clickhouse-go/v2
 ```
 
 ## Examples

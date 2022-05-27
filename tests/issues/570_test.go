@@ -2,7 +2,7 @@ package issues
 
 import (
 	"database/sql"
-	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/supresu/clickhouse-go/v2"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

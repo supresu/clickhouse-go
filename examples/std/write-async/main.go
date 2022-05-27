@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/supresu/clickhouse-go/v2"
 )
 
 const ddl = `

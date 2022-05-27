@@ -3,7 +3,7 @@ package issues
 import (
 	"context"
 	"fmt"
-	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/supresu/clickhouse-go/v2"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
