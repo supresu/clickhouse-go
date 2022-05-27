@@ -95,16 +95,16 @@ func (o *Options) fromDSN(in string) error {
 	for v := range params {
 		switch v {
 		case "username":
-			if a.Auth.Username == "" {
-				a.Auth.Username = params.Get(v)
+			if o.Auth.Username == "" {
+				o.Auth.Username = params.Get(v)
 			}
 		case "password":
-			if a.Auth.Password == "" {
-				a.Auth.Password = params.Get(v)
+			if o.Auth.Password == "" {
+				o.Auth.Password = params.Get(v)
 			}
 		case "database":
-			if a.Auth.Database == "" {
-				a.Auth.Database = params.Get(v)
+			if o.Auth.Database == "" {
+				o.Auth.Database = params.Get(v)
 			}
 		case "debug":
 			o.Debug, _ = strconv.ParseBool(params.Get(v))
