@@ -81,7 +81,7 @@ func (q *Query) encodeClientInfo(encoder *binary.Encoder, revision uint64) error
 	if revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME {
 		encoder.Int64(0) // initial_query_start_time_microseconds
 	}
-	encoder.Byte(1) // interface [tcp - 1, http - 2]
+	encoder.Uvarint(1) // interface [tcp - 1, http - 2] TODO
 	{
 		encoder.String(osUser)
 		encoder.String(hostname)

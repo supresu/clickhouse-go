@@ -71,8 +71,7 @@ func dial(ctx context.Context, addr string, num int, opt *Options) (*connect, er
 			stream:      stream,
 			encoder:     binary.NewEncoder(stream),
 			decoder:     binary.NewDecoder(stream),
-			// revision:    proto.ClientTCPProtocolVersion, // TODO
-			revision:    proto.DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO,
+			revision:    proto.ClientTCPProtocolVersion,
 			structMap:   &structMap{},
 			compression: compression,
 			connectedAt: time.Now(),

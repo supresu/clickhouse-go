@@ -30,7 +30,8 @@ const ClientName = "Golang SQLDriver"
 const (
 	ClientVersionMajor       = 1
 	ClientVersionMinor       = 1
-	ClientTCPProtocolVersion = DBMS_TCP_PROTOCOL_VERSION
+	// ClientTCPProtocolVersion = DBMS_TCP_PROTOCOL_VERSION
+	ClientTCPProtocolVersion = 54213 // TODO
 )
 
 type ClientHandshake struct{}
