@@ -74,6 +74,11 @@ func (c *connect) handshake(database, username, password string) error {
 		c.revision = c.server.Revision
 		c.debugf("[handshake] downgrade client proto")
 	}
+	// TODO
+	if c.revision > proto.DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO {
+		c.revision = proto.DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO
+		c.debugf("[handshake] test client proto, revision=%d", c.revision)
+	}
 	c.debugf("[handshake] <- %s", c.server)
 	return nil
 }
