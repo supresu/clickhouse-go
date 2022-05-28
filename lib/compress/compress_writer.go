@@ -19,6 +19,7 @@ package compress
 
 import (
 	"io"
+	"log"
 
 	"github.com/supresu/clickhouse-go/v2/lib/cityhash102"
 	"github.com/pierrec/lz4/v4"
@@ -74,6 +75,7 @@ func (w *Writer) Flush() (err error) {
 		endian.PutUint64(w.zdata[0:], checkSum.Lower64())
 		endian.PutUint64(w.zdata[8:], checkSum.Higher64())
 	}
+	log.Printf("[compress_writer] %s %s", string(w.data), string(w.zdata)) // TODO
 	if _, err := w.wr.Write(w.zdata[:compressedSize+checksumSize]); err != nil {
 		return err
 	}
