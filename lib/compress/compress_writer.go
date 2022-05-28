@@ -75,7 +75,7 @@ func (w *Writer) Flush() (err error) {
 		endian.PutUint64(w.zdata[0:], checkSum.Lower64())
 		endian.PutUint64(w.zdata[8:], checkSum.Higher64())
 	}
-	log.Printf("[compress_writer] %s %s", string(w.data), string(w.zdata)) // TODO
+	log.Printf("[compress_writer] %v %v", w.data, w.zdata) // TODO
 	if _, err := w.wr.Write(w.zdata[:compressedSize+checksumSize]); err != nil {
 		return err
 	}
